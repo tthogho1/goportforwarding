@@ -68,7 +68,7 @@ jobs:
           mkdir -p dist
           go build -ldflags "-s -w -H windowsgui" -o dist/$APP-${{ matrix.name }}.exe .
 
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         with:
           name: ${{ env.APP }}-${{ matrix.name }}
           path: |
