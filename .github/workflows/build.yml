@@ -1,0 +1,77 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  APP: goportforwarding
+  CGO_ENABLED: "1"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go test -race ./tunnel ./profile
+
+  build:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-amd64
+            os: ubuntu-latest
+          - name: linux-arm64
+            os: ubuntu-24.04-arm
+          - name: darwin-universal
+            os: macos-latest
+          - name: windows-amd64
+            os: windows-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gcc pkg-config libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev
+
+      - name: Build (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p dist
+          go build -ldflags "-s -w" -o dist/$APP-${{ matrix.name }} .
+
+      - name: Build (macOS universal)
+        if: runner.os == 'macOS'
+        run: make darwin
+
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          mkdir -p dist
+          go build -ldflags "-s -w -H windowsgui" -o dist/$APP-${{ matrix.name }}.exe .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APP }}-${{ matrix.name }}
+          path: |
+            dist/${{ env.APP }}-${{ matrix.name }}
+            dist/${{ env.APP }}-${{ matrix.name }}.exe
+          if-no-files-found: error
